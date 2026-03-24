@@ -6,14 +6,18 @@ import urllib.request
 from urllib.parse import urlencode, quote
 from pathlib import Path
 
-# 로컬 패키지 임포트 설정
+# Import local modules
 APP_DIR = Path(__file__).parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
-from building_register.region import search_region_code
+try:
+    from building_register.region import search_region_code
+except ImportError:
+    st.error("Error: 'building_register' folder not found. Please upload the entire folder to GitHub.")
+    st.stop()
 
-# --- 기본 상수 및 데이터 ---
+# --- Constant & Data ---
 API_KEY = "2d5bf447007714bfd2519b0a0c9d754c46d6da3ceccdb9adb046bcdc5ecc402f"
 BASE_URL = "https://apis.data.go.kr/1613000/BldRgstHubService"
 
@@ -37,7 +41,7 @@ BUSAN_DONG_TO_GU = {
 }
 ALL_DONGS = sorted(BUSAN_DONG_TO_GU.keys())
 
-# --- 유틸리티 함수 ---
+# --- Utilities ---
 def format_money(man_won: int) -> str:
     if man_won <= 0: return "0원"
     uk = man_won // 10000
@@ -53,8 +57,7 @@ def format_date(yyyymmdd: str) -> str:
     try:
         y, m, d = int(yyyymmdd[:4]), int(yyyymmdd[4:6]), int(yyyymmdd[6:8])
         return f"{y}년 {m}월 {d}일"
-    except Exception:
-        return yyyymmdd
+    except Exception: return yyyymmdd
 
 def guess_floor_from_ho(ho: str) -> str:
     digits = "".join(c for c in ho if c.isdigit())
@@ -75,7 +78,7 @@ def total_parking(item: dict) -> int:
             int(item.get("oudrMechUtcnt") or 0) + int(item.get("oudrAutoUtcnt") or 0))
 
 # --- API 연동 함수 ---
-st.cache_data
+@st.cache_data
 def fetch_building_info(dong: str, gu: str, jibeon: str, ho: str):
     bun, ji = parse_jibeon(jibeon)
     region_query = f"부산광역시 {gu} {dong}"
@@ -118,201 +121,193 @@ def fetch_building_info(dong: str, gu: str, jibeon: str, ho: str):
 
 # --- 메인 앱 ---
 st.set_page_config(page_title="인스타그램 매물 생성기", page_icon="🏠", layout="wide")
-st.title("🏠 인스타그램 매물 자동화 및 생성기")
+st.markdown("<h2 style='text-align: center; color: #1E3A8A; margin-top: -1rem;'>🏠 인스타그램 매물 자동 생성기 (Web Ver.)</h2>", unsafe_allow_html=True)
+
+# CSS for compact layout
+st.markdown("""
+    <style>
+    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p { font-size: 1.1rem; font-weight: bold; }
+    .block-container { padding-top: 1.5rem; padding-bottom: 0rem; max-width: 95%; }
+    div[data-testid="stVerticalBlock"] > div { margin-top: -0.7rem; }
+    .stTextInput > div > div > input { padding-top: 5px; padding-bottom: 5px; }
+    div[data-testid="stExpander"] { margin-bottom: 0.5rem; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # 세션 상태 초기화
 if "bld_data" not in st.session_state:
     st.session_state.bld_data = {
-        "area": "", "area_public": 0.0, "floor_no": "", "total_floors": "", 
+        "area": "", "area_public": "0.00", "floor_no": "", "total_floors": "", 
         "use_date": "", "parking": "", "prop_type": "", "bld_name": "", "vln_yn": ""
     }
+if "generate_post" not in st.session_state:
+    st.session_state.generate_post = False
 
-tab_listing, tab_agent = st.tabs(["  매물 정보  ", "  중개사 정보  "])
+tab_listing, tab_agent = st.tabs(["  🏢 매물 정보 입력  ", "  👤 중개사 정보 설정  "])
 
 with tab_agent:
-    st.markdown("### 【 공인중개사 정보 】")
-    cfg_name = st.text_input("상호명 *", value="부경파트너공인중개사사무소")
-    cfg_addr = st.text_input("소재지 *", value="부산시 남구 대연동 512-2 1층")
-    cfg_phone = st.text_input("연락처 *", value="010-6402-2328")
-    cfg_reg = st.text_input("등록번호", value="제26290-2022-00010호")
-    cfg_agent_name = st.text_input("대표자 성명", value="이지훈")
-    cfg_email = st.text_input("이메일", value="keejihun@nate.com")
-    cfg_coverage = st.text_input("중개 가능 지역", value="부산시 진구/남구/수영구")
+    st.markdown("### 【 ⚙️ 공인중개사 정보 설정 】")
+    cfg_name = st.text_input("상호명 *", value="부경파트너공인중개사사무소", key="cfg_name")
+    cfg_addr = st.text_input("소재지 *", value="부산시 남구 대연동 512-2 1층", key="cfg_addr")
+    cfg_phone = st.text_input("연락처 *", value="010-6402-2328", key="cfg_phone")
+    cfg_reg = st.text_input("등록번호", value="제26290-2022-00010호", key="cfg_reg")
+    cfg_agent_name = st.text_input("대표자 성명", value="이지훈", key="cfg_agent_name")
+    cfg_email = st.text_input("이메일", value="keejihun@nate.com", key="cfg_email")
+    cfg_coverage = st.text_input("중개 가능 지역", value="부산시 진구/남구/수영구", key="cfg_coverage")
 
 with tab_listing:
-    col1, col2 = st.columns([1, 1])
+    # 3컬럼으로 분할하여 한 화면에 배치 (1, 1, 1.4 비율)
+    col1, col2, col3 = st.columns([1, 1, 1.4])
 
     with col1:
-        st.markdown("### 【 주소 및 호수 】")
-        dong = st.selectbox("동 *", ALL_DONGS, index=ALL_DONGS.index("광안동"))
+        st.caption("📍 【 주소 및 거래 조건 】")
+        dong = st.selectbox("동 *", ALL_DONGS, index=ALL_DONGS.index("광안동"), key="sb_dong")
         gu_list = BUSAN_DONG_TO_GU.get(dong, [])
-        gu = st.selectbox("구", gu_list, index=0) if gu_list else st.text_input("구 입력")
+        gu = st.selectbox("구", gu_list, index=0, key="sb_gu") if gu_list else st.text_input("구 입력", key="ti_gu")
         
-        col_addr1, col_addr2 = st.columns(2)
-        jibeon = col_addr1.text_input("지번 * (예: 123-45)")
-        ho = col_addr2.text_input("호수 * (예: 203)")
-        bld_name_manual = st.text_input("건물명(별칭)", value="")
+        ca1, ca2 = st.columns(2)
+        jibeon = ca1.text_input("지번 *", placeholder="123-45", key="ti_jibeon")
+        ho = ca2.text_input("호수 *", placeholder="203", key="ti_ho")
+        bld_name_manual = st.text_input("건물명(수정)", value="", placeholder="수동 입력 또는 조회 시 자동", key="ti_bld_name_manual")
 
-        st.markdown("---")
-        st.markdown("### 【 거래 조건 】")
-        trade_type = st.radio("거래형태 *", ["월세", "전세"], horizontal=True)
-        deposit = st.number_input("보증금(만원) *", min_value=0, value=0, step=100)
+        trade_type = st.radio("거래형태 *", ["월세", "전세"], horizontal=True, key="rb_trade_type")
+        ct1, ct2 = st.columns(2)
+        deposit = ct1.number_input("보증금(만원) *", min_value=0, value=0, step=100, key="ni_deposit")
         monthly = 0
         if trade_type == "월세":
-            monthly = st.number_input("월세(만원)", min_value=0, value=0, step=10)
+            monthly = ct2.number_input("월세(만원)", min_value=0, value=0, step=10, key="ni_monthly")
         
-        col_mgmt1, col_mgmt2 = st.columns([1, 2])
-        mgmt = col_mgmt1.number_input("관리비(만원)", min_value=0, value=10, step=1)
-        mgmt_rule = col_mgmt2.checkbox("관리규약에 따름")
-        mgmt_detail = st.text_input("관리비 세부 내역", value=f"공용관리비 : {mgmt}만원 (관리 규약 따라 수도,전기,가스 별도)" if mgmt_rule else (f"공용관리비 : {mgmt-2}만원, 인터넷 2만원" if mgmt>=2 else "인터넷 포함"))
+        mgmt = st.number_input("관리비(만원)", min_value=0, value=10, key="ni_mgmt")
+        mgmt_rule = st.checkbox("관리규약에 따름", value=True, key="cb_mgmt_rule")
+        mgmt_detail = st.text_area("관리비 세부 내역", 
+                                  value=f"공용관리비 : {mgmt}만원 (관리 규약 따라 수도,전기,가스 별도)" if mgmt_rule else (f"공용관리비 : {mgmt-2}만원, 인터넷 2만원" if mgmt>=2 else "인터넷 포함"),
+                                  height=68, key="ta_mgmt_detail")
 
     with col2:
-        st.markdown("### 【 매물 상세 (조회 후 자동 입력) 】")
+        st.caption("📋 【 매물 상세 / 기타 】")
         bd = st.session_state.bld_data
         
-        v_area = st.text_input("전용면적(㎡)", value=bd["area"])
-        v_area_public = st.text_input("공용면적(㎡)", value=bd["area_public"])
-        v_floor = st.text_input("매물층수", value=bd["floor_no"])
-        v_total_floors = st.text_input("건물 총 층수", value=bd["total_floors"])
-        v_use_date = st.text_input("사용승인일", value=bd["use_date"])
-        v_parking = st.text_input("총 주차대수(대)", value=bd["parking"])
-        v_prop_type = st.text_input("매물종류", value=bd["prop_type"])
+        v_area = st.text_input("전용면적(㎡)", value=bd["area"], help="조회 시 자동 입력", key="ti_v_area")
+        v_area_public = st.text_input("공용면적(㎡)", value=bd["area_public"], key="ti_v_area_public")
         
-        st.markdown("---")
-        st.markdown("### 【 기타 정보 】")
-        col_etc1, col_etc2 = st.columns(2)
-        movein_type = col_etc1.radio("입주날짜", ["즉시", "날짜 지정"], horizontal=True)
-        movein_date = col_etc2.text_input("날짜 (예: 2026-03-31)", disabled=(movein_type=="즉시"))
+        cf1, cf2 = st.columns(2)
+        v_floor = cf1.text_input("매물층수", value=bd["floor_no"], key="ti_v_floor")
+        v_total_floors = cf2.text_input("건물의 총 층수", value=bd["total_floors"], key="ti_v_total_floors")
         
-        rooms = st.text_input("방/욕실 수", value="1/1")
+        v_use_date = st.text_input("사용승인일", value=bd["use_date"], key="ti_v_use_date")
+        v_parking = st.text_input("총 주차대수(대)", value=bd["parking"], key="ti_v_parking")
+        v_prop_type = st.text_input("매물종류", value=bd["prop_type"], key="ti_v_prop_type")
         
-        col_dir1, col_dir2 = st.columns(2)
-        direction = col_dir1.text_input("방향", value="동향")
-        dir_std = col_dir2.radio("방향 기준", ["거실 기준", "안방 기준"], horizontal=True)
+        st.write("입주날짜")
+        ce1, ce2 = st.columns([1, 2])
+        movein_type = ce1.radio("입주날짜선택", ["즉시", "지정"], horizontal=True, label_visibility="collapsed", key="rb_movein_type")
+        movein_date = ce2.text_input("지정일", value="2026-03-31", disabled=(movein_type=="즉시"), label_visibility="collapsed", key="ti_movein_date")
         
-        elevator = st.text_input("엘리베이터(대)", value="1")
+        cr1, cr2 = st.columns(2)
+        rooms = cr1.text_input("방/욕실 개수", value="1/1", key="ti_rooms")
+        elevator = cr2.text_input("엘리베이터 유무/대수", value="1대", key="ti_elevator")
         
-        is_vln = "위반건축물임" if bd["vln_yn"] == "Y" else ("해당없음" if bd["vln_yn"] == "N" else "미확인")
-        st.info(f"**위반건축물 여부**: {is_vln}")
+        st.write("방향")
+        cd1, cd2 = st.columns([1, 2])
+        direction = cd1.text_input("방향", value="동향", label_visibility="collapsed", key="ti_direction")
+        dir_std = cd2.selectbox("방향 기준", ["거실 기준", "안방 기준"], label_visibility="collapsed", key="sb_dir_std")
+        
+        is_vln = "⚠️ 위반건축물" if bd["vln_yn"] == "Y" else ("✅ 위반사항 없음" if bd["vln_yn"] == "N" else "❔ 위반 여부 미확인")
+        st.info(is_vln)
 
-st.markdown("---")
-col_btn1, col_btn2 = st.columns([1, 1])
+    with col3:
+        st.caption("📝 【 결과 미리보기 및 복사 】")
+        
+        if st.button("🔍 건축물대장 정보 조회", use_container_width=True, icon="🔎"):
+            if not jibeon:
+                st.error("지번을 입력해주세요.")
+            else:
+                with st.spinner("API 조회 대기 중..."):
+                    try:
+                        res = fetch_building_info(dong, gu, jibeon, ho)
+                        title_items = res.get("title_items", [])
+                        expos_items = res.get("expos_items", [])
+                        if not title_items:
+                            st.warning("❌ 건축물대장 정보를 찾을 수 없습니다.")
+                        else:
+                            t = title_items[0]
+                            area, area_public, floor_no, expos_prop_type = "", 0.0, "", ""
+                            for e in expos_items:
+                                if not isinstance(e, dict): continue
+                                gb_cd, gb_nm = str(e.get("exposPubuseGbCd", "")), str(e.get("exposPubuseGbCdNm", ""))
+                                if gb_cd == "1" or "전유" in gb_nm:
+                                    if not area:
+                                        area = e.get("area", "")
+                                        floor_no = e.get("flrNo", "")
+                                        expos_prop_type = e.get("mainPurpsCdNm", "")
+                                else:
+                                    try: 
+                                        val = float(e.get("area", 0) or 0)
+                                        area_public += val
+                                    except: pass
+                            if not area and expos_items and isinstance(expos_items[0], dict):
+                                area = expos_items[0].get("area", "")
+                                floor_no = expos_items[0].get("flrNo", "")
+                            if not floor_no: floor_no = guess_floor_from_ho(ho)
+                            
+                            st.session_state.bld_data = {
+                                "area": str(area), "area_public": f"{area_public:.2f}",
+                                "floor_no": str(floor_no), "total_floors": str(t.get("grndFlrCnt", "")),
+                                "use_date": format_date(t.get("useAprDay", "")), "parking": str(total_parking(t)),
+                                "prop_type": str(expos_prop_type or t.get("mainPurpsCdNm", "")),
+                                "bld_name": str(t.get("bldNm", "") or t.get("roadNmBldNm", "")),
+                                "vln_yn": str(t.get("vlnBldYn", "")).strip().upper()
+                            }
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"⚠️ API 호출 오류: {e}")
 
-with col_btn1:
-    if st.button("🔍 건축물대장 조회", use_container_width=True, type="primary"):
-        if not jibeon:
-            st.error("지번을 입력해주세요.")
-        else:
-            with st.spinner("건축물대장 조회 중..."):
-                try:
-                    res = fetch_building_info(dong, gu, jibeon, ho)
-                    title_items = res.get("title_items", [])
-                    expos_items = res.get("expos_items", [])
-                    if not title_items:
-                        st.error("❌ 해당 주소의 건축물대장 정보를 찾지 못했습니다.")
-                    else:
-                        t = title_items[0]
-                        area, area_public, floor_no, expos_prop_type = "", 0.0, "", ""
-                        for e in expos_items:
-                            if not isinstance(e, dict): continue
-                            gb_cd, gb_nm = str(e.get("exposPubuseGbCd", "")), str(e.get("exposPubuseGbCdNm", ""))
-                            if gb_cd == "1" or "전유" in gb_nm:
-                                if not area:
-                                    area = e.get("area", "")
-                                    floor_no = e.get("flrNo", "")
-                                    expos_prop_type = e.get("mainPurpsCdNm", "")
-                            else:
-                                try: area_public += float(e.get("area", 0) or 0)
-                                except: pass
-                        if not area and expos_items and isinstance(expos_items[0], dict):
-                            area = expos_items[0].get("area", "")
-                            floor_no = expos_items[0].get("flrNo", "")
-                        
-                        if not floor_no: floor_no = guess_floor_from_ho(ho)
-                        
-                        st.session_state.bld_data = {
-                            "area": str(area),
-                            "area_public": f"{area_public:.2f}",
-                            "floor_no": str(floor_no),
-                            "total_floors": str(t.get("grndFlrCnt", "")),
-                            "use_date": format_date(t.get("useAprDay", "")),
-                            "parking": str(total_parking(t)),
-                            "prop_type": str(expos_prop_type or t.get("mainPurpsCdNm", "")),
-                            "bld_name": str(t.get("bldNm", "") or t.get("roadNmBldNm", "")),
-                            "vln_yn": str(t.get("vlnBldYn", "")).strip().upper()
-                        }
-                        st.success(f"✅ 조회 완료 ({len(title_items)}건)")
-                        st.rerun()  # 재렌더링하여 매물 상세 위젯 업데이트
-                except Exception as e:
-                    import traceback
-                    st.error(f"오류가 발생했습니다: {e}\n{traceback.format_exc()}")
+        if st.button("🚀 인스타그램 게시글 생성", use_container_width=True, type="primary", icon="✨"):
+            st.session_state.generate_post = True
 
-with col_btn2:
-    if st.button("📝 게시글 생성", use_container_width=True):
-        st.session_state.generate_post = True
-
-st.subheader("게시글 미리보기")
-
-if st.session_state.get("generate_post", False):
-    def _area_line(excl, pub):
-        if not excl: return "📐 전용면적  미확인"
-        try:
-            excl_f, pub_f = float(excl), float(pub)
-            py = round((excl_f + pub_f) / 3.3, 2)
-            return f"📐 전용면적  {excl}㎡ / 공용면적  {excl_f + pub_f:.2f}㎡ ({py}평)"
-        except:
-            return f"📐 전용면적  {excl}㎡"
+        def _get_area_line(excl, pub):
+            if not excl: return "📐 전용면적  미확인"
+            try:
+                excl_f = float(excl)
+                pub_f = float(pub or 0)
+                tot_f = excl_f + pub_f
+                py_f = tot_f / 3.3
+                py_s = f"{py_f:.2f}"
+                return f"📐 전용면적  {excl}㎡ / 공용면적  {tot_f:.2f}㎡ ({py_s}평)"
+            except:
+                return f"📐 전용면적  {excl}㎡"
+        
+        final_text = ""
+        if st.session_state.generate_post:
+            b_clean, j_clean = parse_jibeon(jibeon or "")
+            b_name = bld_name_manual or bd["bld_name"]
+            addr = f"부산 {gu} {dong} {b_clean}" + (f"-{j_clean}" if j_clean and j_clean != "0" else "")
+            if b_name: addr += f' ("{b_name}")'
             
-    bun, ji = parse_jibeon(jibeon)
-    bld_final = bld_name_manual or bd["bld_name"]
-    
-    addr = f"부산광역시 {gu} {dong} {bun}" + (f"-{ji}" if ji and ji not in ("0","") else "")
-    if bld_final: addr += f', "{bld_final}"'
-    
-    movein_str = "즉시 입주 가능" if movein_type == "즉시" else (movein_date or "협의")
-    
-    if trade_type == "월세":
-        price_str = f"💰 보증금  {format_money(deposit)} / 월세  {format_money(monthly)}"
-    else:
-        price_str = f"💰 전세  {format_money(deposit)}"
+            mv_str = "즉시 입주" if movein_type == "즉시" else (movein_date or "협의")
+            price_str = f"💰 보증금  {format_money(deposit)} / 월세  {format_money(monthly)}" if trade_type == "월세" else f"💰 전세  {format_money(deposit)}"
+            m_str = f"{mgmt}만원" + (f" ({mgmt_detail})" if mgmt_detail else "") if mgmt > 0 else "없음"
+            
+            p_lines = [
+                f"📞  {cfg_phone}", f"🏢  {cfg_name}", "━━━━━━━━━━━━━━━━━━━━━━", "",
+                price_str, f"🔑  관리비  {m_str}", "", "━━━━━━━━━━━━━━━━━━━━━━",
+                f"📍  {addr}", f"🏠  매물종류  {v_prop_type or '미확인'} ({trade_type})",
+                _get_area_line(v_area, v_area_public),
+                f"🏗️  층수  {v_floor}층 / {v_total_floors}층",
+                f"📅  사용승인일  {v_use_date or '미확인'}",
+                f"🚗  주차  {v_parking}대" if v_parking else "🚗  주차  미확인",
+                "⚠️  위반건축물 여부: 이 세대는 위반건축물임" if bd["vln_yn"] == "Y" else "",
+                f"🧭  방향  {direction} ({dir_std})" if direction else "",
+                f"🛗  엘리베이터  {elevator}", f"🛏️  방/욕실  {rooms}",
+                f"📆  입주  {mv_str}", "━━━━━━━━━━━━━━━━━━━━━━", "",
+                "⊙ 중개사 정보", f"  상호: {cfg_name}", f"  소재지: {cfg_addr}",
+                f"  연락처: {cfg_phone}", f"  등록번호: {cfg_reg}", f"  대표: {cfg_agent_name}",
+            ]
+            if cfg_coverage: p_lines += ["", "━━━━━━━━━━━━━━━━━━━━━━", "▣ 매물 접수 및 중개 범위 ▣", "매수 / 매도 / 임대 / 전세", f"({cfg_coverage})"]
+            if cfg_email: p_lines += ["", f"✉️  비즈니스 문의  {cfg_email}"]
+            
+            final_text = "\n".join(l for l in p_lines if l != "")
         
-    mgmt_str = f"{mgmt}만원" + (f" (세부: {mgmt_detail})" if mgmt_detail else "") if mgmt > 0 else "없음"
-    
-    lines = [
-        f"📞 {cfg_phone}",
-        f"🏢 {cfg_name}",
-        "━━━━━━━━━━━━━━━━━━━━━━",
-        "",
-        price_str,
-        f"🔑 관리비  {mgmt_str}",
-        "",
-        "━━━━━━━━━━━━━━━━━━━━━━",
-        f"📍 {addr}",
-        f"🏠 건물종류  {v_prop_type}  /  {trade_type}",
-        _area_line(v_area, v_area_public),
-        f"🏗️  층수  {v_floor}층/{v_total_floors}층",
-        f"📅 사용승인일  {v_use_date}",
-        f"🚗 주차  {v_parking}대" if v_parking else "🚗 주차  미확인",
-        "⚠️ 이 세대는 위반건축물임" if bd["vln_yn"] == "Y" else "",
-        f"🧭 방향  {direction} ({dir_std})" if direction else "",
-        f"🛗 엘리베이터  {elevator}대",
-        f"🛏️  방/욕실  {rooms}",
-        f"📆 입주  {movein_str}",
-        "━━━━━━━━━━━━━━━━━━━━━━",
-        "",
-        "⊙ 중개사 정보",
-        f"  상호  {cfg_name}",
-        f"  소재지  {cfg_addr}",
-        f"  연락처  {cfg_phone}",
-        f"  등록번호  {cfg_reg}",
-        f"  대표  {cfg_agent_name}",
-    ]
-    if cfg_coverage:
-        lines += ["", "━━━━━━━━━━━━━━━━━━━━━━", "▣ 매물 접수 및 중개 범위 ▣", "매수 / 매도 / 임대 / 전세", f"({cfg_coverage})"]
-    if cfg_email:
-        lines += ["", f"✉️  비즈니스 문의  {cfg_email}"]
-        
-    final_text = "\n".join(l for l in lines if l != "")
-    st.text_area("인스타그램 글 복사 공간", value=final_text, height=500)
-else:
-    st.text_area("인스타그램 글 복사 공간", value="게시글 자동 생성을 위해 '게시글 생성' 버튼을 클릭하세요.", height=500)
+        st.text_area("결과 (아래를 클릭하여 전체 복사)", value=final_text or "버튼을 누르면 글이 생성됩니다.", height=480)
+        if final_text:
+            st.caption("💡 팁: 텍스트 영역을 클릭한 뒤 Ctrl+A(또는 Cmd+A) 후 Ctrl+C(또는 Cmd+C) 하세요.")
