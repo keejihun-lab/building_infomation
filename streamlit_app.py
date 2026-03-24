@@ -127,57 +127,79 @@ if "bld_data" not in st.session_state:
         "use_date": "", "parking": "", "prop_type": "", "bld_name": "", "vln_yn": ""
     }
 
-# 1. 사이드바 (중개사 정보 설정)
-with st.sidebar:
-    st.header("중개사 정보 설정")
-    cfg_name = st.text_input("상호명", value="부경파트너공인중개사사무소")
-    cfg_addr = st.text_input("소재지", value="부산시 남구 대연동 512-2 1층")
-    cfg_phone = st.text_input("연락처", value="010-6402-2328")
+tab_listing, tab_agent = st.tabs(["  매물 정보  ", "  중개사 정보  "])
+
+with tab_agent:
+    st.markdown("### 【 공인중개사 정보 】")
+    cfg_name = st.text_input("상호명 *", value="부경파트너공인중개사사무소")
+    cfg_addr = st.text_input("소재지 *", value="부산시 남구 대연동 512-2 1층")
+    cfg_phone = st.text_input("연락처 *", value="010-6402-2328")
     cfg_reg = st.text_input("등록번호", value="제26290-2022-00010호")
-    cfg_agent = st.text_input("대표", value="이지훈")
+    cfg_agent_name = st.text_input("대표자 성명", value="이지훈")
     cfg_email = st.text_input("이메일", value="keejihun@nate.com")
-    cfg_coverage = st.text_input("중개 범위", value="부산시 진구/남구/수영구")
+    cfg_coverage = st.text_input("중개 가능 지역", value="부산시 진구/남구/수영구")
 
-# 2. 거래 조건 / 매물 정보
-col1, col2 = st.columns([1, 1])
+with tab_listing:
+    col1, col2 = st.columns([1, 1])
 
-with col1:
-    st.subheader("매물 주소 및 거래 조건")
-    dong = st.selectbox("동 선택", ALL_DONGS, index=ALL_DONGS.index("광안동"))
-    gu_list = BUSAN_DONG_TO_GU.get(dong, [])
-    gu = st.selectbox("구 선택", gu_list, index=0) if gu_list else st.text_input("구 입력")
-    
-    col_addr1, col_addr2 = st.columns(2)
-    jibeon = col_addr1.text_input("지번 (예: 190-19)")
-    ho = col_addr2.text_input("호수 (예: 203)")
-    bld_name_manual = st.text_input("건물명(별칭) 직접입력", value="")
+    with col1:
+        st.markdown("### 【 주소 및 호수 】")
+        dong = st.selectbox("동 *", ALL_DONGS, index=ALL_DONGS.index("광안동"))
+        gu_list = BUSAN_DONG_TO_GU.get(dong, [])
+        gu = st.selectbox("구", gu_list, index=0) if gu_list else st.text_input("구 입력")
+        
+        col_addr1, col_addr2 = st.columns(2)
+        jibeon = col_addr1.text_input("지번 * (예: 123-45)")
+        ho = col_addr2.text_input("호수 * (예: 203)")
+        bld_name_manual = st.text_input("건물명(별칭)", value="")
 
-    st.markdown("---")
-    trade_type = st.radio("거래 형태", ["월세", "전세"], horizontal=True)
-    deposit = st.number_input("보증금(만원)", min_value=0, value=0, step=100)
-    monthly = 0
-    if trade_type == "월세":
-        monthly = st.number_input("월세(만원)", min_value=0, value=0, step=10)
-    
-    col_mgmt1, col_mgmt2 = st.columns([1, 2])
-    mgmt = col_mgmt1.number_input("관리비(만원)", min_value=0, value=10, step=1)
-    mgmt_rule = col_mgmt2.checkbox("관리규약에 따름")
-    mgmt_detail = st.text_input("관리비 세부 내역", value=f"공용관리비 : {mgmt}만원 (관리 규약 따라 수도,전기,가스 별도)" if mgmt_rule else (f"공용관리비 : {mgmt-2}만원, 인터넷 2만원" if mgmt>=2 else "인터넷 포함"))
+        st.markdown("---")
+        st.markdown("### 【 거래 조건 】")
+        trade_type = st.radio("거래형태 *", ["월세", "전세"], horizontal=True)
+        deposit = st.number_input("보증금(만원) *", min_value=0, value=0, step=100)
+        monthly = 0
+        if trade_type == "월세":
+            monthly = st.number_input("월세(만원)", min_value=0, value=0, step=10)
+        
+        col_mgmt1, col_mgmt2 = st.columns([1, 2])
+        mgmt = col_mgmt1.number_input("관리비(만원)", min_value=0, value=10, step=1)
+        mgmt_rule = col_mgmt2.checkbox("관리규약에 따름")
+        mgmt_detail = st.text_input("관리비 세부 내역", value=f"공용관리비 : {mgmt}만원 (관리 규약 따라 수도,전기,가스 별도)" if mgmt_rule else (f"공용관리비 : {mgmt-2}만원, 인터넷 2만원" if mgmt>=2 else "인터넷 포함"))
 
-    st.markdown("---")
-    col_etc1, col_etc2 = st.columns(2)
-    rooms = col_etc1.text_input("방/욕실 수", value="1/1")
-    elevator = col_etc2.text_input("엘리베이터(대)", value="1")
-    movein_type = col_etc1.radio("입주날짜", ["즉시", "날짜지정"], horizontal=True)
-    movein_date = col_etc2.text_input("날짜지정 (예: 2026-03-31)", disabled=(movein_type=="즉시"))
-    
-    direction = col_etc1.text_input("방향", value="동향")
-    dir_std = col_etc2.radio("방향 기준", ["거실 기준", "안방 기준"], horizontal=True)
+    with col2:
+        st.markdown("### 【 매물 상세 (조회 후 자동 입력) 】")
+        bd = st.session_state.bld_data
+        
+        v_area = st.text_input("전용면적(㎡)", value=bd["area"])
+        v_area_public = st.text_input("공용면적(㎡)", value=bd["area_public"])
+        v_floor = st.text_input("매물층수", value=bd["floor_no"])
+        v_total_floors = st.text_input("건물 총 층수", value=bd["total_floors"])
+        v_use_date = st.text_input("사용승인일", value=bd["use_date"])
+        v_parking = st.text_input("총 주차대수(대)", value=bd["parking"])
+        v_prop_type = st.text_input("매물종류", value=bd["prop_type"])
+        
+        st.markdown("---")
+        st.markdown("### 【 기타 정보 】")
+        col_etc1, col_etc2 = st.columns(2)
+        movein_type = col_etc1.radio("입주날짜", ["즉시", "날짜 지정"], horizontal=True)
+        movein_date = col_etc2.text_input("날짜 (예: 2026-03-31)", disabled=(movein_type=="즉시"))
+        
+        rooms = st.text_input("방/욕실 수", value="1/1")
+        
+        col_dir1, col_dir2 = st.columns(2)
+        direction = col_dir1.text_input("방향", value="동향")
+        dir_std = col_dir2.radio("방향 기준", ["거실 기준", "안방 기준"], horizontal=True)
+        
+        elevator = st.text_input("엘리베이터(대)", value="1")
+        
+        is_vln = "위반건축물임" if bd["vln_yn"] == "Y" else ("해당없음" if bd["vln_yn"] == "N" else "미확인")
+        st.info(f"**위반건축물 여부**: {is_vln}")
 
-with col2:
-    st.subheader("매물 상세 정보 (API)")
-    
-    if st.button("🔍 건축물대장 조회", type="primary"):
+st.markdown("---")
+col_btn1, col_btn2 = st.columns([1, 1])
+
+with col_btn1:
+    if st.button("🔍 건축물대장 조회", use_container_width=True, type="primary"):
         if not jibeon:
             st.error("지번을 입력해주세요.")
         else:
@@ -220,29 +242,18 @@ with col2:
                             "vln_yn": str(t.get("vlnBldYn", "")).strip().upper()
                         }
                         st.success(f"✅ 조회 완료 ({len(title_items)}건)")
+                        st.rerun()  # 재렌더링하여 매물 상세 위젯 업데이트
                 except Exception as e:
                     import traceback
                     st.error(f"오류가 발생했습니다: {e}\n{traceback.format_exc()}")
-    
-    bd = st.session_state.bld_data
-    
-    # API 연동 데이터 인풋창 (가져온 데이터로 자동완성 되지만 수동 수정도 가능하게 처리)
-    v_area = st.text_input("전용면적(㎡)", value=bd["area"])
-    v_area_public = st.text_input("공용면적(㎡)", value=bd["area_public"])
-    v_floor = st.text_input("매물층수", value=bd["floor_no"])
-    v_total_floors = st.text_input("건물 총 층수", value=bd["total_floors"])
-    v_use_date = st.text_input("사용승인일", value=bd["use_date"])
-    v_parking = st.text_input("총 주차대수(대)", value=bd["parking"])
-    v_prop_type = st.text_input("매물종류", value=bd["prop_type"])
-    
-    is_vln = "위반건축물임" if bd["vln_yn"] == "Y" else ("해당없음" if bd["vln_yn"] == "N" else "미확인")
-    st.info(f"**위반건축물 여부**: {is_vln}")
-    
-# 3. 텍스트 합성 
-st.markdown("---")
+
+with col_btn2:
+    if st.button("📝 게시글 생성", use_container_width=True):
+        st.session_state.generate_post = True
+
 st.subheader("게시글 미리보기")
 
-if st.button("📝 게시글 텍스트 생성 (위 내용으로)"):
+if st.session_state.get("generate_post", False):
     def _area_line(excl, pub):
         if not excl: return "📐 전용면적  미확인"
         try:
@@ -294,7 +305,7 @@ if st.button("📝 게시글 텍스트 생성 (위 내용으로)"):
         f"  소재지  {cfg_addr}",
         f"  연락처  {cfg_phone}",
         f"  등록번호  {cfg_reg}",
-        f"  대표  {cfg_agent}",
+        f"  대표  {cfg_agent_name}",
     ]
     if cfg_coverage:
         lines += ["", "━━━━━━━━━━━━━━━━━━━━━━", "▣ 매물 접수 및 중개 범위 ▣", "매수 / 매도 / 임대 / 전세", f"({cfg_coverage})"]
@@ -303,4 +314,5 @@ if st.button("📝 게시글 텍스트 생성 (위 내용으로)"):
         
     final_text = "\n".join(l for l in lines if l != "")
     st.text_area("인스타그램 글 복사 공간", value=final_text, height=500)
-    st.success("게시글이 성공적으로 생성되었습니다. 위 창에서 복사(Ctrl+C, Cmd+C) 하세요.")
+else:
+    st.text_area("인스타그램 글 복사 공간", value="게시글 자동 생성을 위해 '게시글 생성' 버튼을 클릭하세요.", height=500)
